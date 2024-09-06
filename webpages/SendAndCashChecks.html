@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escrow XRP Transfer</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js"></script>
+    <script>
+        const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+
+        async function sendCheck() {
+            const standby_seed = document.getElementById("txtSourceSeed").value;
+            const operational_seed = document.getElementById("txtReceiverSeed").value;
+
+            const currency = document.getElementById("txtCurrency").value;
+            const sendAmount = document.getElementById("txtAmount").value;
+
+            results  = "Connecting to the selected ledger.\n"
+            console.log(results);
+
+
+            await client.connect()
+            results = 'Connected.'
+            console.log(results);
+
+            var check_amount = sendAmount;
+
+            const standby_wallet = xrpl.Wallet.fromSeed(standby_seed)
+            const operational_wallet = xrpl.Wallet.fromSeed(operational_seed)
+
+            if (currency !=  "XRP") {
+                check_amount = {
+                "currency": currency,
+                "value": sendAmount,
+                "issuer": standby_wallet.address  	
+                }
+            }
+
+            const send_check_tx = {
+                "TransactionType": "CheckCreate",
+                "Account": standby_wallet.address,
+                "SendMax": check_amount,
+                "Destination": operational_wallet.address
+            }
+
+ 
+            try {
+                const check_prepared = await client.autofill(send_check_tx);
+                const check_signed = standby_wallet.sign(check_prepared);
+                const check_result = await client.submitAndWait(check_signed.tx_blob)
+
+                results += 'Sending ' + check_amount + ' ' + currency + ' to ' +
+                operational_seed.address + '...';
+                console.log(results);
+
+                if(check_result.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Check sent successfully!!");
+
+                    results += `Transaction succeeded: https://testnet.xrpl.org/transactions/${check_signed.hash}`;
+                    console.log(results);
+                    console.log(JSON.stringify(check_result.result, null, 2))
+
+                } else {
+                    console.error(check_result.result.meta.TransactionResult);
+                    alert("Transaction failed: " + check_result.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+
+        async function getChecks() {
+            const standby_seed = document.getElementById("txtSourceSeed").value;
+
+            results  = "Connecting to the selected ledger.\n"
+            console.log(results);
+
+
+            await client.connect()
+            results = 'Connected.'
+            console.log(results);
+
+            const standby_wallet = xrpl.Wallet.fromSeed(standby_seed)
+
+            const check_objects = await client.request({
+                "id": 5,
+                "command": "account_objects",
+                "account": standby_wallet.address,
+                "ledger_index": "validated",
+                "type": "check"
+            })
+
+            // Accessing the index values from the result
+            const checks = check_objects.result.account_objects;
+            if (checks.length > 0) {
+                checks.forEach((check, index) => {
+                    console.log(`Check ${index + 1} Index: ${check.index}`);
+                    // You can also set the index to an input field or display it
+                    document.getElementById('txtIndex').value = check.index; // Example to set the first index to the input field
+                });
+            } else {
+                console.log("No checks found.");
+            }
+            checkResults = JSON.stringify(check_objects.result, null, 2);
+            console.log(checkResults);
+
+            client.disconnect();
+        }
+
+        async function cashCheck() {
+            const standby_seed = document.getElementById("txtSourceSeed").value;
+            const operational_seed = document.getElementById("txtReceiverSeed").value;
+
+            const currency = document.getElementById("txtCurrency").value;
+            const sendAmount = document.getElementById("txtAmount").value;
+
+            const checkId = document.getElementById("txtIndex").value;
+
+            console.log("Connecting to the selected ledger.");
+
+
+            await client.connect()
+            console.log('Connected.');
+
+            let check_amount = sendAmount;
+
+            const standby_wallet = xrpl.Wallet.fromSeed(standby_seed)
+            const operational_wallet = xrpl.Wallet.fromSeed(operational_seed)
+
+            if (currency !=  "XRP") {
+                check_amount = {
+                "currency": currency,
+                "value": sendAmount,
+                "issuer": standby_wallet.address  	
+                }
+            }
+
+            const cash_check_tx = {
+                "TransactionType": "CheckCash",
+                "Account": operational_wallet.address,
+                "Amount": check_amount,
+                "CheckID": checkId
+            }
+
+ 
+            try {
+                const cash_prepared = await client.autofill(cash_check_tx)
+                const cash_signed = operational_wallet.sign(cash_prepared)
+                const check_result = await client.submitAndWait(cash_signed.tx_blob)
+
+                let results = ' Receiving ' + operational_wallet.address + ' ' + currency + '.\n'
+                console.log(results);
+
+                if(check_result.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Congradulation!");
+
+                    const balance1 = await client.getXrpBalance(standby_wallet.address);
+                    const balance2 = await client.getXrpBalance(operational_wallet.address);
+                    document.getElementById('balance-info').innerText = `Source Balance: ${balance1} XRP\nDestination Balance: ${balance2} XRP`;
+                } else {
+                    console.error(check_result.result.meta.TransactionResult);
+                    alert("Transaction failed: " + check_result.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+        async function cancelCheck() {
+            const standby_seed = document.getElementById("txtSourceSeed").value;
+            const operational_seed = document.getElementById("txtReceiverSeed").value;
+
+            const checkId = document.getElementById("txtIndex").value;
+
+            console.log("Connecting to the selected ledger.");
+
+
+            await client.connect()
+            console.log('Connected.');
+
+            const standby_wallet = xrpl.Wallet.fromSeed(standby_seed)
+            const operational_wallet = xrpl.Wallet.fromSeed(operational_seed)
+
+            const cancel_check_tx = {
+                "TransactionType": "CheckCancel",
+                "Account": operational_wallet.address,
+                "CheckID": checkId
+            }
+
+ 
+            try {
+                const cancel_prepared = await client.autofill(cancel_check_tx)
+                const cancel_signed = operational_wallet.sign(cancel_prepared)
+                const cancel_result = await client.submitAndWait(cancel_signed.tx_blob)
+
+
+                if(cancel_result.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Check canceled successfully!!");
+
+                    results += `Transaction succeeded: https://testnet.xrpl.org/transactions/${cancel_result.hash}`;
+                    console.log(results);
+                    console.log(JSON.stringify(cancel_result.result, null, 2))
+
+                } else {
+                    console.error(cancel_result.result.meta.TransactionResult);
+                    alert("Transaction failed: " + cancel_result.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+
+        async function getBalance() {
+            document.getElementById("result").innerText = "Wait ...";
+            await client.connect();
+
+            const issuer = xrpl.Wallet.fromSeed(document.getElementById('txtSourceSeed').value);
+
+            const issuer_balances = await client.request({
+                command: "gateway_balances",
+                account: issuer.address,
+                ledger_index: "validated"
+            });
+
+            const result = JSON.stringify(issuer_balances.result, null, 2);
+            document.getElementById("result").innerText = result;
+            console.log(result);
+            client.disconnect();
+        }
+    </script>
+</head>
+<body>
+    <div class="container my-4">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <h1 class="text-center">Send and Cash Checks</h1>
+                <form>
+                    <div class="form-group">
+                        <label for="txtSourceSeed">Source Seed</label>
+                        <input type="text" class="form-control" id="txtSourceSeed" placeholder="Enter source seed">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtReceiverSeed">Receiver Seed</label>
+                        <input type="text" class="form-control" id="txtReceiverSeed" placeholder="Enter receiver seed">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtAmount">Amount</label>
+                        <input type="text" class="form-control" id="txtAmount" placeholder="Enter the amount">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtCurrency">Currency</label>
+                        <input type="text" class="form-control" id="txtCurrency" placeholder="Currency">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block mt-2" onclick="sendCheck()">Send check</button>
+
+                    <button type="button" class="btn btn-success btn-block mt-2" onclick="getChecks()">Get Check</button>
+                    <div class="form-group">
+                        <label for="txtIndex">Check ID</label>
+                        <input type="text" class="form-control" id="txtIndex" placeholder="Enter Check ID">
+                    </div>
+                    <button type="button" class="btn btn-danger btn-block mt-2" onclick="cancelCheck()">Cancel Check</button>
+                    <button type="button" class="btn btn-primary btn-block mt-2" onclick="cashCheck()">Cash check</button>
+                  
+                </form>
+                <hr>
+                <button type="button" class="btn btn-secondary btn-block mt-2" onclick="getBalance()">Get Balance</button>
+                <h5>Balance Information:</h5>
+                <div class="alert alert-info mt-4" id="result"></div>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

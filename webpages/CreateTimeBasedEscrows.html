@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escrow XRP Transfer</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js"></script>
+    <script>
+        function addSeconds(numOfSeconds, date = new Date()) {
+            date.setSeconds(date.getSeconds() + numOfSeconds);
+            date = Math.floor(date / 1000)
+            date = date - 946684800
+            return date;
+        }
+        const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+
+        async function createEscrow() {
+            let results  = "Connecting to the selected ledger.\n";
+            console.log(results);
+
+            const standbySeed = document.getElementById("txtSourceSeed").value;
+            const receiver = document.getElementById("txtDestinationAddress").value;
+
+            await client.connect();
+            results = 'Connected.'
+            console.log(results);
+            
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            
+            const delayInSeconds = parseInt(document.getElementById("txtFinish").value);
+            let finishAfterTime = new Date()
+            finishAfterTime = addSeconds(parseInt(delayInSeconds))
+            
+            const cancelInSeconds = parseInt(document.getElementById("txtCancel").value);
+            let cancelAfterTime = new Date();
+            cancelAfterTime = addSeconds(parseInt(cancelInSeconds));
+
+            const xrpAmount = document.getElementById("txtAmount").value;
+
+            const escrowCreateTx = {
+                "TransactionType": "EscrowCreate",
+                "Account": standbyWallet.address,
+                "Amount": xrpl.xrpToDrops(xrpAmount),
+                "Destination": receiver,
+                "FinishAfter": finishAfterTime,
+                "CancelAfter": cancelAfterTime
+            };
+            try {
+                const prepared = await client.autofill(escrowCreateTx);
+                const signed = standbyWallet.sign(prepared);
+                const tx_result = await client.submitAndWait(signed.tx_blob);
+
+                if(tx_result.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Escrow created successfully!");
+
+                    results += `Transaction succeeded: https://testnet.xrpl.org/transactions/${signed.hash}`;
+                    console.log(results);
+                    console.log(JSON.stringify(tx_result.result, null, 2));
+
+                    // Extract the Sequence number
+                    const sequence = tx_result.result.Sequence;
+                    document.getElementById("sequencePanel").innerText = sequence;
+
+                } else {
+                    console.error(tx_result.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+
+        async function finishEscrow() {
+            results  = "Connecting to the selected ledger.\n"
+            console.log(results);
+
+            const standbySeed = document.getElementById("txtSourceSeed").value;
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+
+            const receiver = document.getElementById("txtDestinationAddress").value;
+
+            const sequence = document.getElementById("sequencePanel").innerText;
+
+            try {
+                await client.connect();
+                results  += "\nConnected. Finishing escrow.\n"
+                console.log(results);
+
+
+                const prepared = await client.autofill({
+                    "TransactionType": "EscrowFinish",
+                    "Account": standbyWallet.address,
+                    "Owner": standbyWallet.address,
+                    "OfferSequence": parseInt(sequence)
+                });
+
+                const signed = standbyWallet.sign(prepared);
+                const tx = await client.submitAndWait(signed.tx_blob);
+
+                if(tx.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Escrow finished successfully!");
+
+                    results += `Transaction succeeded: https://testnet.xrpl.org/transactions/${signed.hash}`;
+                    console.log(results);
+                    console.log(JSON.stringify(tx.result, null, 2));
+
+                } else {
+                    console.error(tx.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+
+        async function cancelEscrow() {
+            results  = "Connecting to the selected ledger.\n";
+            console.log(results);
+
+            const standbySeed = document.getElementById("txtSourceSeed").value;
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            const sequence = document.getElementById("sequencePanel").innerText;
+
+            try {
+                await client.connect();
+                results  += "\nConnected. Finishing escrow.\n";
+                console.log(results);
+                
+                const prepared = await client.autofill({
+                    "TransactionType": "EscrowCancel",
+                    "Account": standbyWallet.address,
+                    "Owner": standbyWallet.address,
+                    "OfferSequence": parseInt(sequence)
+                });
+
+                const signed = standbyWallet.sign(prepared);
+                const tx = await client.submitAndWait(signed.tx_blob);
+
+                if(tx.result.meta.TransactionResult === 'tesSUCCESS'){
+                    alert("Escrow canceled successfully!");
+                    
+                    results += `Transaction succeeded: https://testnet.xrpl.org/transactions/${signed.hash}`;
+                    console.log(results);
+                    console.log(JSON.stringify(tx.result, null, 2));
+
+                } else {
+                    console.error(tx.result.meta.TransactionResult);
+                }
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            } finally {
+                client.disconnect();
+            }
+        }
+
+        async function getBalance() {
+            const standbySeed = document.getElementById("txtSourceSeed").value;
+            const cancelAfterTime = xrpl.Wallet.fromSeed(standbySeed).address;
+            const address2 = document.getElementById('txtDestinationAddress').value;
+
+            if (!cancelAfterTime || !address2) {
+                document.getElementById('balance-info').innerText = "Please enter an address";
+                return;
+            }
+
+            document.getElementById('balance-info').innerText = "Wait a minute please ...";
+            await client.connect();
+            const balance1 = await client.getXrpBalance(cancelAfterTime);
+            const balance2 = await client.getXrpBalance(address2);
+            document.getElementById('balance-info').innerText = `Balance1: ${balance1} XRP\nBalance2: ${balance2} XRP`;
+
+            await client.disconnect();
+        }
+        async function getEscrows() {
+            results  = "Connecting to the selected ledger.\n";
+            console.log(results);
+
+            const mySeed = document.getElementById("txtSourceSeed").value;
+            const wallet = xrpl.Wallet.fromSeed(mySeed);
+
+            await client.connect();
+            results  += "\nConnected. Finishing escrow.\n";
+            console.log(results);
+
+            try {
+                const escrow_objects = await client.request({
+                    "id": 5,
+                    "command": "account_objects",
+                    "account": wallet.address,
+                    "ledger_index": "validated",
+                    "type": "escrow"
+                });
+
+                const escrowDetails = JSON.stringify(escrow_objects.result, null, 2);
+                console.log(escrowDetails);
+                
+            } catch (error) {
+                console.error("Error checking escrow:", error);
+                document.getElementById("result").innerText = "An error occurred: " + error.message;
+            } finally {
+                client.disconnect();
+            }
+        }
+    </script>
+</head>
+<body>
+    <div class="container my-4">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <h1 class="text-center">Escrow XRP Transfer</h1>
+                <form>
+                    <div class="form-group">
+                        <label for="txtSourceSeed">Source Seed</label>
+                        <input type="text" class="form-control" id="txtSourceSeed" placeholder="Enter source seed">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtDestinationAddress">Destination Wallet Address</label>
+                        <input type="text" class="form-control" id="txtDestinationAddress" placeholder="Enter destination wallet address">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtAmount">Amount of XRP</label>
+                        <input type="text" class="form-control" id="txtAmount" placeholder="Enter XRP amount">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtFinish">Finish Time (in Seconds)</label>
+                        <input type="number" class="form-control" id="txtFinish" placeholder="Enter finish time in seconds">
+                    </div>
+                    <div class="form-group">
+                        <label for="txtCancel">Cancel Time (in Seconds)</label>
+                        <input type="number" class="form-control" id="txtCancel" placeholder="Enter cancel time in seconds">
+                    </div>
+                    <button type="button" class="btn btn-primary btn-block" onclick="createEscrow()">Create Escrow</button>
+                    <h5>Sequence Number:</h5>
+                    <p id="sequencePanel"> ... </p>
+
+                    <button type="button" class="btn btn-secondary btn-block mt-2" onclick="getBalance()">Get Balance</button>
+                    <h5>Balance Information:</h5>
+                    <p id="balance-info"> ... </p>
+
+                    <button type="button" class="btn btn-success btn-block mt-2" onclick="finishEscrow()">Finish Escrow</button>
+                    <button type="button" class="btn btn-danger btn-block mt-2" onclick="cancelEscrow()">Cancel Escrow</button>
+
+                    <button type="button" class="btn btn-secondary btn-block mt-2" onclick="getEscrows()">Get Escrows</button>
+                </form>
+                <hr>
+                
+                
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

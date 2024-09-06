@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ripple NFT</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src='https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js'></script>
+    <style>
+        .notify { color: rgb(100, 19, 250); font-weight: bold; }
+        body { padding-top: 20px; }
+    </style>
+    <script>
+        const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+
+        async function createSellOffer() {
+            document.getElementById('nft-status').innerText = "Creating a sell offer, please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const standbySeed = document.getElementById('txtSource').value;
+            const receiverSeed = document.getElementById('txtReceiver').value;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            const receiverWallet = xrpl.Wallet.fromSeed(receiverSeed);
+
+            const expirationField = document.getElementById('txtExpiration').value;
+            const tokenID = document.getElementById("txtTokenId").value;
+            const amount = document.getElementById('txtAmount').value;
+            const flag = document.getElementById('txtFlag').value;
+            
+
+            try {
+                let results  = "Connecting to the selected ledger.\n"
+                console.log(results);
+
+                await client.connect()
+                results += 'Connected.'
+                console.log(results);
+
+                // Compute the Expiration Date, if present. 
+                // The expiration date represents the number of seconds after the Ripple Epoch that the offer should expire. 
+                // Start with the current date, add the number of days till expiration, 
+                // then set the expirationDate variable to the converted date in Ripple time.
+                var expirationDate = null;
+                if (expirationField !="") {
+                    var days = expirationField
+                    let d = new Date()
+                    d.setDate(d.getDate() + parseInt(days))
+                    var expirationDate = xrpl.isoTimeToRippleTime(d)
+                }
+                // Define the transaction. A Flags value of 1 indicates that this transaction is a sell offer.
+                const transactionBlob = {
+                    "TransactionType": "NFTokenCreateOffer",
+                    "Account": standbyWallet.address,
+                    "NFTokenID": tokenID,
+                    "Amount": amount,
+                    "Flags": parseInt(flag)
+                };
+                // If the Expiration Date is present, append it to the transaction.
+                if (expirationDate != null) {
+                    transactionBlob.Expiration = expirationDate;
+                }
+                // If the Destination field is not empty, append it to the transaction. 
+                // When the destination is set, only the destination account can buy the NFToken.    
+                if(receiverWallet !== '') {
+                    transactionBlob.Destination = receiverWallet.address;
+                }
+                // Submit the transaction and wait for the results.
+                const tx = await client.submitAndWait(transactionBlob,{wallet: standbyWallet});
+                results += '\n\n***Sell Offers***\n';
+
+                // Request the list of sell offers for the token.
+                let nftSellOffers;
+
+                try {
+                nftSellOffers = await client.request({
+                    method: "nft_sell_offers",
+                    nft_id: tokenID})
+                } catch (err) {
+                    nftSellOffers = "No sell offers.";
+                }
+                results += JSON.stringify(nftSellOffers,null,2);
+
+                // Request the list of buy offers for the token.
+                results += '\n\n***Buy Offers***\n';
+                let nftBuyOffers;
+                try {
+                nftBuyOffers = await client.request({
+                    method: "nft_buy_offers",
+                    nft_id: tokenID })
+                    results += JSON.stringify(nftBuyOffers,null,2);
+                } catch (err) {
+                    results += 'No buy offers.';
+                }
+                
+                // Report the results of the transaction.
+                results += '\n\nTransaction result:\n' + JSON.stringify(tx.result.meta.TransactionResult, null, 2);
+                results += '\n\nBalance changes:\n' + JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+                
+
+                document.getElementById('nft-status').innerText = `Sell-offer created successfully!`;
+
+                document.getElementById('transaction-info').innerText = results;
+
+            } catch (error) {
+                console.error('Error set sell offer:', error);
+                document.getElementById('nft-status').innerText = `Error: ${error.message}`;
+            } finally {
+                await client.disconnect();
+            }
+        }
+
+        async function createBuyOffer() {
+            document.getElementById('nft-status').innerText = "Creating a buy offer, please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const standbySeed = document.getElementById('txtSource').value;
+            const receiverSeed = document.getElementById('txtReceiver').value;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            const receiverWallet = xrpl.Wallet.fromSeed(receiverSeed);
+
+            const expirationField = document.getElementById('txtExpiration').value;
+            const tokenID = document.getElementById("txtTokenId").value;
+            const amount = document.getElementById('txtAmount').value;
+            // const flag = document.getElementById('txtFlag').value;
+            
+
+            try {
+                let results  = "Connecting to the selected ledger.\n"
+                console.log(results);
+
+                await client.connect()
+                results += 'Connected.'
+                console.log(results);
+
+                // Prepare the expiration date, if present.
+                var expirationDate = null;
+                if (expirationField !="") {
+                    var days = expirationField
+                    let d = new Date()
+                    d.setDate(d.getDate() + parseInt(days))
+                    var expirationDate = xrpl.isoTimeToRippleTime(d)
+                }
+                // Define the transaction. Setting the Flags value to null indicates that this is a buy offer.
+                const transactionBlob = {
+                    "TransactionType": "NFTokenCreateOffer",
+                    "Account": standbyWallet.classicAddress,
+                    "Owner": receiverWallet.address,
+                    "NFTokenID": tokenID,
+                    "Amount": amount,
+                    "Flags":null
+                };
+
+                // If the Expiration Date is present, append it to the transaction.
+                if (expirationDate != null) {
+                    transactionBlob.Expiration = expirationDate;
+                }
+                
+                // Submit the transaction and wait for the results.
+                const tx = await client.submitAndWait(transactionBlob,{wallet: standbyWallet});
+
+                results += '\n\n***Sell Offers***\n';
+                // Request the list of sell offers for the token.
+                let nftSellOffers;
+
+                try {
+                nftSellOffers = await client.request({
+                    method: "nft_sell_offers",
+                    nft_id: tokenID})
+                } catch (err) {
+                    nftSellOffers = "No sell offers.";
+                }
+                results += JSON.stringify(nftSellOffers,null,2);
+
+                // Request the list of buy offers for the token.
+                results += '\n\n***Buy Offers***\n';
+                let nftBuyOffers;
+                try {
+                nftBuyOffers = await client.request({
+                    method: "nft_buy_offers",
+                    nft_id: tokenID })
+                    results += JSON.stringify(nftBuyOffers,null,2);
+                } catch (err) {
+                    results += 'No buy offers.';
+                }
+                
+                // Report the results of the transaction.
+                results += '\n\nTransaction result:\n' + JSON.stringify(tx.result.meta.TransactionResult, null, 2);
+                results += '\n\nBalance changes:\n' + JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+                
+
+                document.getElementById('nft-status').innerText = `Buy-offer created successfully!`;
+
+                document.getElementById('transaction-info').innerText = results;
+
+            } catch (error) {
+                console.error('Error create buy offer:', error);
+                document.getElementById('nft-status').innerText = `Error: ${error.message}`;
+            } finally {
+                await client.disconnect();
+            }
+        }
+        async function cancelOffer() {
+            document.getElementById('nft-status').innerText = "Creating a cancel offer, please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const tokenID = document.getElementById("txtTokenId").value;
+
+            const tokenOfferIDs = [tokenID]            
+
+            try {
+                let results  = "Connecting to the selected ledger.\n"
+                console.log(results);
+
+                await client.connect()
+                results += 'Connected.'
+                console.log(results);
+
+                // Define the transaction. 
+                const transactionBlob = {
+                    "TransactionType": "NFTokenCancelOffer",
+                    "Account": standbyWallet.classicAddress,
+                    "NFTokenOffers": tokenOfferIDs
+                };
+                
+                // Submit the transaction and wait for the results.
+                const tx = await client.submitAndWait(transactionBlob,{wallet: standbyWallet});
+
+                results += '\n\n***Sell Offers***\n';
+                // Request the list of sell offers for the token.
+                let nftSellOffers;
+
+                try {
+                nftSellOffers = await client.request({
+                    method: "nft_sell_offers",
+                    nft_id: tokenID})
+                } catch (err) {
+                    nftSellOffers = "No sell offers.";
+                }
+                results += JSON.stringify(nftSellOffers,null,2);
+
+                // Request the list of buy offers for the token.
+                results += '\n\n***Buy Offers***\n';
+                let nftBuyOffers;
+                try {
+                nftBuyOffers = await client.request({
+                    method: "nft_buy_offers",
+                    nft_id: tokenID })
+                    results += JSON.stringify(nftBuyOffers,null,2);
+                } catch (err) {
+                    results += 'No buy offers.';
+                }
+                
+                // Report the results of the transaction.
+                results += '\n\nTransaction result:\n' + JSON.stringify(tx.result.meta.TransactionResult, null, 2);
+                results += '\n\nBalance changes:\n' + JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+                
+
+                document.getElementById('nft-status').innerText = `The offers canceled successfully!`;
+
+                document.getElementById('transaction-info').innerText = results;
+
+            } catch (error) {
+                console.error('Error cancel offer:', error);
+                document.getElementById('nft-status').innerText = `Error: ${error.message}`;
+            } finally {
+                await client.disconnect();
+            }
+        }
+        async function getOffers() {
+            document.getElementById('nft-status').innerText = "please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const tokenID = document.getElementById("txtTokenId").value;
+
+            let results  = "Connecting to the selected ledger.\n"
+            console.log(results);
+
+            await client.connect()
+            results += 'Connected.'
+            console.log(results);
+
+            results += '\n\n***Sell Offers***\n';
+            // Request the list of sell offers for the token.
+            let nftSellOffers;
+
+            try {
+                nftSellOffers = await client.request({
+                    method: "nft_sell_offers",
+                    nft_id: tokenID})
+            } catch (err) {
+                nftSellOffers = "No sell offers.";
+            }
+            results += JSON.stringify(nftSellOffers,null,2);
+
+            // Request the list of buy offers for the token.
+            results += '\n\n***Buy Offers***\n';
+            let nftBuyOffers;
+            try {
+                nftBuyOffers = await client.request({
+                    method: "nft_buy_offers",
+                    nft_id: tokenID })
+                    results += JSON.stringify(nftBuyOffers,null,2);
+            } catch (err) {
+                results += 'No buy offers.';
+            }
+                
+            document.getElementById('nft-status').innerText = "Feth information succeed!"
+            document.getElementById('transaction-info').innerText = results;
+        }
+        // Accept sell Offer function $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+        async function acceptSellOffer() {
+            document.getElementById('nft-status').innerText = "Accepting a sell offer, please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const standbySeed = document.getElementById('txtSource').value;
+            const receiverSeed = document.getElementById('txtReceiver').value;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            const receiverWallet = xrpl.Wallet.fromSeed(receiverSeed);
+
+            // const tokenID = document.getElementById("txtTokenId").value;
+
+            const offerIndex = document.getElementById("txtOfferIndex").value;
+            
+            try {
+                let results  = "Connecting to the selected ledger.\n"
+                console.log(results);
+
+                await client.connect()
+                results += 'Connected.'
+                console.log(results);
+
+                const transactionBlob = {
+                    "TransactionType": "NFTokenAcceptOffer",
+                    "Account": standbyWallet.classicAddress,
+                    "NFTokenSellOffer": offerIndex,
+                };
+
+                const tx = await client.submitAndWait(transactionBlob,{wallet: standbyWallet});
+                
+                const nfts = await client.request({
+                    method: "account_nfts",
+                    account: standbyWallet.classicAddress
+                });
+
+                 // Get the balances for both accounts.
+                results += "Balance of source address is: " + await client.getXrpBalance(standbyWallet.address);
+                results += "Balance of receiver address is: " + await client.getXrpBalance(receiverWallet.address);
+                
+                // Report the results of the transaction.
+                results += '\n\nTransaction result:\n' + JSON.stringify(tx.result.meta.TransactionResult, null, 2);
+                results += '\n\nBalance changes:\n' + JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+                
+
+                document.getElementById('nft-status').innerText = `Sell-offer accepted successfully!`;
+
+                document.getElementById('transaction-info').innerText = results;
+
+            } catch (error) {
+                console.error('Error accept sell offer:', error);
+                document.getElementById('nft-status').innerText = `Error: ${error.message}`;
+            } finally {
+                await client.disconnect();
+            }
+        }
+        async function acceptBuyOffer(){
+            document.getElementById('nft-status').innerText = "Accepting a sell offer, please wait...";
+            document.getElementById('transaction-info').innerText = "";
+
+            const standbySeed = document.getElementById('txtSource').value;
+            const receiverSeed = document.getElementById('txtReceiver').value;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+            const receiverWallet = xrpl.Wallet.fromSeed(receiverSeed);
+
+            // const tokenID = document.getElementById("txtTokenId").value;
+
+            const offerIndex = document.getElementById("txtOfferIndex").value;
+            
+            try {
+                let results  = "Connecting to the selected ledger.\n"
+                console.log(results);
+
+                await client.connect()
+                results += 'Connected.'
+                console.log(results);
+
+                const transactionBlob = {
+                    "TransactionType": "NFTokenAcceptOffer",
+                    "Account": standbyWallet.classicAddress,
+                    "NFTokenBuyOffer": offerIndex,
+                };
+
+                const tx = await client.submitAndWait(transactionBlob,{wallet: standbyWallet});
+                
+                const nfts = await client.request({
+                    method: "account_nfts",
+                    account: standbyWallet.classicAddress
+                });
+
+                 // Get the balances for both accounts.
+                results += "Balance of source address is: " + await client.getXrpBalance(standbyWallet.address);
+                results += "Balance of receiver address is: " + await client.getXrpBalance(receiverWallet.address);
+                
+                // Report the results of the transaction.
+                results += '\n\nTransaction result:\n' + JSON.stringify(tx.result.meta.TransactionResult, null, 2);
+                results += '\n\nBalance changes:\n' + JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+                
+
+                document.getElementById('nft-status').innerText = `Buy-offer accepted successfully!`;
+
+                document.getElementById('transaction-info').innerText = results;
+
+            } catch (error) {
+                console.error('Error accept buy offer:', error);
+                document.getElementById('nft-status').innerText = `Error: ${error.message}`;
+            } finally {
+                await client.disconnect();
+            }
+        }
+    </script>
+</head>
+<body class="container">
+    <h1 class="text-center mb-4">Ripple Testnet NFT Generator</h1>
+
+    <!-- NFT Minting Form -->
+    <div class="card p-4 mb-4">
+        <h2 class="mb-3">Enter the information to execute your function</h2>
+        <div class="mb-3">
+            <label for="txtSource">Source Seed (Owner)</label>
+            <input type="text" id="txtSource" class="form-control" placeholder="Source seed" />
+        </div>
+        <div class="mb-3">
+            <label for="txtReceiver">Destination Seed (Buyer or Seller)</label>
+            <input type="text" id="txtReceiver" class="form-control" placeholder="Destination seed" />
+        </div>
+        <div class="mb-3">
+            <label for="txtExpiration">Expiration Date</label>
+            <input type="text" id="txtExpiration" class="form-control" placeholder="Expirationan Date (In days)" />
+        </div>
+        <div class="mb-3">
+            <label for="txtFlag">Flag</label>
+            <input type="text" id="txtFlag" class="form-control" placeholder="1 for Sell and null for Buy" />
+        </div>
+        <div class="mb-3">
+            <label for="txtAmount">Amount of Token</label>
+            <input type="text" id="txtAmount" class="form-control" placeholder="Amount" />
+        </div>
+        <div class="mb-3">
+            <label for="txtTokenId">Token ID</label>
+            <input type="text" id="txtTokenId" class="form-control" placeholder="Token ID" />
+        </div>
+        <button class="btn btn-success" onclick="createSellOffer()">Create Sell Offer</button>
+        <button class="btn btn-primary mt-2" onclick="createBuyOffer()">Create Buy Offer</button>
+
+        <p>Please enter all IDs of the offers on Token ID field with cama (to cancel)</p>
+        <button class="btn btn-danger mt-2" onclick="cancelOffer()">Cancel offer</button>
+        <button class="btn btn-info mt-2" onclick="getOffers()">Get offer</button>
+        <div class="mb-3">
+            <label for="txtOfferIndex">NFT Offer Index</label>
+            <input type="text" id="txtOfferIndex" class="form-control" placeholder="NFT Offer Index" />
+        </div>
+        <button class="btn btn-success mt-2" onclick="acceptSellOffer()">Accept Sell offer</button>
+        <button class="btn btn-primary mt-2" onclick="acceptBuyOffer()">Accept Buy Offer</button>
+        
+        <p id="nft-status" class="notify mt-3">Status: Ready to mint</p>
+    </div>
+
+    <!-- Transaction Status -->
+    <div class="card p-4">
+        <h2>Transaction Details</h2>
+        <p id="transaction-info" class="notify">Awaiting transaction...</p>
+    </div>
+</body>
+</html>
