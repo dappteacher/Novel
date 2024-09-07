@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XRPL Broker Offers & Transactions</title>
+  
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Custom CSS (Optional) -->
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .container {
+      margin-top: 30px;
+    }
+    h2 {
+      color: #007bff;
+    }
+    .card {
+      margin-top: 20px;
+    }
+    .form-label {
+      font-weight: bold;
+    }
+  </style>
+  <script>
+    function getNet() {
+      // This function uses brute force if statements to discover the selected network instance and return the URI.
+      let net = "wss://s.altnet.rippletest.net:51233";
+      return net
+    } // End of getNet()
+  </script>
+</head>
+<body>
+
+  <div class="container">
+    <h2 class="text-center">XRPL Broker Offers & Transactions</h2>
+
+    <!-- Broker Offer Actions -->
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        Broker Offer Actions
+      </div>
+      <div class="card-body">
+        <form>
+          <div class="mb-3">
+            <label for="brokerTokenIdField" class="form-label">Token ID</label>
+            <input type="text" class="form-control" id="brokerTokenIdField" placeholder="Enter Token ID">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="brGetOffers()">Get Offers</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Broker Sale -->
+    <div class="card">
+      <div class="card-header bg-success text-white">
+        Broker Sale
+      </div>
+      <div class="card-body">
+        <form>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label for="brokerTokenSellOfferIndexField" class="form-label">Sell Offer Index</label>
+              <input type="text" class="form-control" id="brokerTokenSellOfferIndexField" placeholder="Sell Offer Index">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="brokerTokenBuyOfferIndexField" class="form-label">Buy Offer Index</label>
+              <input type="text" class="form-control" id="brokerTokenBuyOfferIndexField" placeholder="Buy Offer Index">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="brokerBrokerFeeField" class="form-label">Broker Fee</label>
+              <input type="text" class="form-control" id="brokerBrokerFeeField" placeholder="Broker Fee">
+            </div>
+          </div>
+          <button type="button" class="btn btn-success" onclick="brokerSale()">Broker Sale</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Broker Cancel Offer -->
+    <div class="card">
+      <div class="card-header bg-danger text-white">
+        Cancel Broker Offer
+      </div>
+      <div class="card-body">
+        <form>
+          <div class="mb-3">
+            <label for="brokerTokenBuyOfferIndexField" class="form-label">Buy Offer Index</label>
+            <input type="text" class="form-control" id="brokerTokenBuyOfferIndexField" placeholder="Buy Offer Index">
+          </div>
+          <button type="button" class="btn btn-danger" onclick="brCancelOffer()">Cancel Offer</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Account Information -->
+    <div class="card">
+      <div class="card-header bg-warning text-dark">
+        Account Information
+      </div>
+      <div class="card-body">
+        <form>
+          <div class="row">
+            <div class="col-md-4 mb-3">
+              <label for="standbySeedField" class="form-label">Standby Account Seed</label>
+              <input type="text" class="form-control" id="standbySeedField" placeholder="Standby Seed">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="operationalSeedField" class="form-label">Operational Account Seed</label>
+              <input type="text" class="form-control" id="operationalSeedField" placeholder="Operational Seed">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="brokerSeedField" class="form-label">Broker Account Seed</label>
+              <input type="text" class="form-control" id="brokerSeedField" placeholder="Broker Seed">
+            </div>
+          </div>
+          <button type="button" class="btn btn-warning" onclick="getAccountsFromSeeds()">Get Accounts from Seeds</button>
+          <button type="button" class="btn btn-secondary" onclick="getBalances()">Get Balances</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="card">
+      <div class="card-header bg-info text-white">
+        Results
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label for="brokerResultField" class="form-label">Broker Results</label>
+          <textarea id="brokerResultField" class="form-control" rows="5" readonly></textarea>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bootstrap JS and Dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- XRPL JavaScript SDK -->
+  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xrpl/2.3.0/xrpl.min.js"></script> -->
+  <script src='https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js'></script>
+
+  <!-- Your Custom JavaScript File -->
+  <script src="ripplex5-broker-nfts.js"></script>
+
+</body>
+</html>
