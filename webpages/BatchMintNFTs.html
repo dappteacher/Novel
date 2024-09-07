@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XRPL Broker Offers & Transactions</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap JS and Dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- XRPL JavaScript SDK -->
+    <script src='https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js'></script>
+
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+    .container {
+      margin-top: 30px;
+    }
+    h2 {
+      color: #007bff;
+    }
+    .card {
+      margin-top: 20px;
+    }
+    .form-label {
+      font-weight: bold;
+    }
+  </style>
+  <script>
+    const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+
+    async function setMinter() {
+        document.getElementById('resultPanel').innerText = "Please wait...";
+
+        const standbySeed = document.getElementById('txtOwnerSeed').value;
+        const minterAddress = document.getElementById('txtMinter').value;
+        
+        try {
+            let results  = "Connecting to the selected ledger.\n"
+            document.getElementById('resultPanel').innerText = results;
+
+            await client.connect();
+            results += 'Connected.'
+            document.getElementById('resultPanel').innerText =results;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+
+            tx_json = {
+                "TransactionType": "AccountSet",
+                "Account": standbyWallet.address,
+                // Set NFTokenMinter to the account number of the authorized minter.
+                "NFTokenMinter": minterAddress,
+                // Set the asfAuthorizedNFTokenMinter flag (the numeric value is 10).
+                "SetFlag": xrpl.AccountSetAsfFlags.asfAuthorizedNFTokenMinter
+            }
+            results += '\nSet Minter.';
+            document.getElementById('resultPanel').innerText =results;
+
+            // Prepare and send the transaction, then wait for results
+            const prepared = await client.autofill(tx_json);
+            const signed = standbyWallet.sign(prepared);
+            const tx_result = await client.submitAndWait(signed.tx_blob);
+
+            // If the transaction succeeds, show the results. If not, report that the transaction failed.
+            if (tx_result.result.meta.TransactionResult == "tesSUCCESS") {
+                results += '\nAccount setting succeeded.\n';
+                document.getElementById('resultPanel').innerText =results;
+                results += JSON.stringify(tx_result,null,2);
+                console.log(results);   
+            } else {
+                throw 'Error sending transaction: ${result}'
+                results += '\nAccount setting failed.'
+                document.getElementById('resultPanel').innerText = results;   
+            }
+
+        } catch (error) {
+            console.error('Error minting NFT:', error);
+            document.getElementById('resultPanel').innerText = `Error: ${error.message}`;
+        } finally {
+            await client.disconnect();
+        }
+    }
+    async function mintOther() {
+        document.getElementById('resultPanel').innerText = "Please wait...";
+
+        const standbySeed = document.getElementById('txtMinterSeed').value;
+        const issuerAddress = document.getElementById('txtIssuer').value;
+        const uriValue = document.getElementById('txtURI').value;
+        const flagValue = document.getElementById('txtFlag').value;
+        const transferFeeValue = document.getElementById('txtTransfer').value;
+        
+        try {
+            let results  = "Connecting to the selected ledger.\n"
+            document.getElementById('resultPanel').innerText = results;
+
+            await client.connect();
+            results += 'Connected.\n'
+            document.getElementById('resultPanel').innerText =results;
+
+            const standbyWallet = xrpl.Wallet.fromSeed(standbySeed);
+
+            // This transaction blob is the same as the one used for the previous mintToken() function, with the addition of the Issuer field.
+            tx_json = {
+                "TransactionType": "NFTokenMint",
+                "Account": standbyWallet.address,
+                // The URI is a link to a data file represented by the NFT.
+                "URI": xrpl.convertStringToHex(uriValue),
+                 // At a minimum, we recommend that you set the tfTransferable flag (8) to enable accounts to sell and resell the NFT for testing purposes.
+                "Flags": parseInt(flagValue),
+                // Transfer fee is a value 0-50000 representing .001% of the price for a resale to be returned to the original issuer. 
+                // For example, 25000 translates to 25% of the price to be sent to the issuer on resale.
+                "TransferFee": parseInt(transferFeeValue),
+                // The Issuer is the original creator of the object represented by the NFT.
+                "Issuer": issuerAddress,
+                // Set NFTokenMinter to the account number of the authorized minter.
+                // The NFTokenTaxon is an optional number field the issuer can use for their own purposes. 
+                // The same taxon can be used for multiple tokens. Set it to 0 if you have no use for it
+                "NFTokenTaxon": 0 //Required, but if you have no use for it, set to zero.
+            }
+            results += '\nSet Minter.';
+            document.getElementById('resultPanel').innerText =results;
+
+            // Submit the transaction and wait for the results.
+            const tx_result = await client.submitAndWait(tx_json, { wallet: standbyWallet} );
+
+            const nfts = await client.request({
+            method: "account_nfts",
+            account: standbyWallet.classicAddress
+            });
+
+            // If the transaction succeeds, show the results. If not, report that the transaction failed.
+            if (tx_result.result.meta.TransactionResult == "tesSUCCESS") {
+                results += '\n\nTransaction result: '+ tx_result.result.meta.TransactionResult;
+                results += '\n\nnfts: ' + JSON.stringify(nfts, null, 2);
+                results  += await client.getXrpBalance(standbyWallet.address);
+                document.getElementById('resultPanel').innerText =results;
+                console.log(results);   
+            } else {
+                throw `Error sending transaction: ${tx_result}`
+                results += '\nAccount setting failed.'
+                document.getElementById('resultPanel').innerText = results;   
+            }
+
+        } catch (error) {
+            console.error('Error minting NFT:', error);
+            document.getElementById('resultPanel').innerText = `Error: ${error.message}`;
+        } finally {
+            await client.disconnect();
+        }
+    }
+  </script>
+</head>
+<body>
+
+  <div class="container">
+    <h2 class="text-center">Assign an Autorized Minter</h2>
+
+     <!-- Results Section -->
+     <div class="card">
+        <div class="card-header bg-warning text-dark">
+          Results
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label for="resultPanel" class="form-label">Transactions Results</label>
+            <textarea id="resultPanel" class="form-control" rows="5" readonly></textarea>
+          </div>
+        </div>
+      </div>
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        Set Minter Action
+      </div>
+      <div class="card-body">
+        <form>
+          <div class="mb-3">
+            <label for="txtOwnerSeed" class="form-label">Owner Seed</label>
+            <input type="text" class="form-control" id="txtOwnerSeed" placeholder="Enter Owner Seed">
+          </div>
+          <div class="mb-3">
+            <label for="txtMinter" class="form-label">Minter Address</label>
+            <input type="text" class="form-control" id="txtMinter" placeholder="Enter Minter Address">
+          </div>
+          <button type="button" class="btn btn-primary" onclick="setMinter()">Set Minter</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-success text-white">
+          Mint Other
+        </div>
+        <div class="card-body">
+          <form>
+            <div class="mb-3">
+              <label for="txtMinterSeed" class="form-label">Minter Seed</label>
+              <input type="text" class="form-control" id="txtMinterSeed" placeholder="Enter Minter Seed">
+            </div>
+            <div class="mb-3">
+                <label for="txtIssuer" class="form-label">Issuer (Owner) Address</label>
+                <input type="text" class="form-control" id="txtIssuer" placeholder="Enter Issuer address">
+            </div>
+            <div class="mb-3">
+              <label for="txtURI" class="form-label">URI Address</label>
+              <input type="text" class="form-control" id="txtURI" placeholder="Enter URI Address">
+            </div>
+            <div class="mb-3">
+                <label for="txtFlag" class="form-label">Flag</label>
+                <input type="text" class="form-control" id="txtFlag" placeholder="Enter Flag">
+            </div>
+            <div class="mb-3">
+                <label for="txtTransfer" class="form-label">Transaction Fee</label>
+                <input type="text" class="form-control" id="txtTransfer" placeholder="Enter Transfer Fee">
+            </div>
+            <button type="button" class="btn btn-success" onclick="mintOther()">Mint Other</button>
+          </form>
+        </div>
+      </div>
+  </div>
+</body>
+</html>
