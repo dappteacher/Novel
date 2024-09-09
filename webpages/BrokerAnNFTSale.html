@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>XRPL Broker Offers & Transactions</title>
+  <title>Broker Offers & Transactions</title>
   
   <!-- Bootstrap CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -26,12 +26,112 @@
       font-weight: bold;
     }
   </style>
+  <!-- Bootstrap JS and Dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- XRPL JavaScript SDK -->
+  <script src='https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js'></script>
+
   <script>
-    function getNet() {
-      // This function uses brute force if statements to discover the selected network instance and return the URI.
-      let net = "wss://s.altnet.rippletest.net:51233";
-      return net
-    } // End of getNet()
+    const client = new xrpl.Client('wss://s.altnet.rippletest.net:51233');
+
+    async function brGetOffers() {
+        result = "Please wait...";
+        brokerResultField.value = result;
+        
+        try {
+            let results  = "Connecting to the selected ledger.\n"
+            brokerResultField.value = result;
+
+            await client.connect();
+            results += 'Connected.';
+            brokerResultField.value = result;
+
+            // Request the list of sell offers for the token.
+            results += '\n\n***Sell Offers***\n'  
+            let nftSellOffers;
+            try {
+              nftSellOffers = await client.request({
+                method: "nft_sell_offers",
+                nft_id: brokerTokenIdField.value  
+              })
+            } catch (err) {
+              nftSellOffers = 'No sell offers.'
+            }
+            results += JSON.stringify(nftSellOffers,null,2)
+              brokerResultField.value = results
+
+            // Request the list of buy offers for the token.
+            results += '\n\n***Buy Offers***\n'
+            let nftBuyOffers
+            try {
+              nftBuyOffers = await client.request({
+                method: "nft_buy_offers",
+                nft_id: brokerTokenIdField.value 
+              })
+            } catch (err) {
+              nftBuyOffers =  'No buy offers.'
+            }
+            results += JSON.stringify(nftBuyOffers,null,2)    
+              brokerResultField.value = results
+
+        } catch (error) {
+            console.error('Error minting NFT:', error);
+            brokerResultField.value = `Error: ${error.message}`;
+        } finally {
+            await client.disconnect();
+        }
+    }
+    async function brokerSale() {
+        const standby_wallet = xrpl.Wallet.fromSeed(standbySeedField.value);
+        const operational_wallet = xrpl.Wallet.fromSeed(operationalSeedField.value);
+        const broker_wallet = xrpl.Wallet.fromSeed (brokerSeedField.value);
+
+        results = "Please wait...";
+        brokerResultField.value = results;
+        
+        try {
+            results  = "Connecting to the selected ledger.\n"
+            brokerResultField.value = results;
+
+            await client.connect();
+            results = 'Connected. Wait ...'
+            brokerResultField.value = results;
+
+            // Prepare the transaction. The difference between a brokered sale and a direct sale 
+            // is that you provide both a sell offer and a buy offer, with an agreed-upon broker's fee.
+            const transactionBlob = {
+                "TransactionType": "NFTokenAcceptOffer",
+                "Account": broker_wallet.classicAddress,
+                "NFTokenSellOffer": brokerTokenSellOfferIndexField.value,
+                "NFTokenBuyOffer": brokerTokenBuyOfferIndexField.value,
+                "NFTokenBrokerFee": brokerBrokerFeeField.value
+            }
+
+            const tx_result = await client.submitAndWait(transactionBlob,{wallet: broker_wallet})
+
+            results += '\n\nTransaction result:\n';
+            results += JSON.stringify(tx_result.result.meta.TransactionResult, null, 2);
+
+            results += "\nBalance changes:\n";
+            results += JSON.stringify(xrpl.getBalanceChanges(tx_result.result.meta), null, 2);
+
+            brokerResultField.value = results;
+
+            results += "\nBalance of standby wallet is: " + await client.getXrpBalance(standby_wallet.address);
+            results += "\nBalance of operational wallet is: " + await client.getXrpBalance(operational_wallet.address);
+            results += "\nBalance of broker is: " + await client.getXrpBalance(broker_wallet.address);
+
+            brokerResultField.value = results;
+            console.log(results);   
+
+        } catch (error) {
+            console.error('Error broker NFT Sale:', error);
+            brokerResultField.value = `Error: ${error.message}`;
+        } finally {
+            await client.disconnect();
+        }
+    }
   </script>
 </head>
 <body>
@@ -64,6 +164,20 @@
         <form>
           <div class="row">
             <div class="col-md-4 mb-3">
+              <label for="standbySeedField" class="form-label">Standby Account Seed (Seller)</label>
+              <input type="text" class="form-control" id="standbySeedField" placeholder="Standby Seed">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="operationalSeedField" class="form-label">Operational Account Seed (Buyer)</label>
+              <input type="text" class="form-control" id="operationalSeedField" placeholder="Operational Seed">
+            </div>
+            <div class="col-md-4 mb-3">
+              <label for="brokerSeedField" class="form-label">Broker Account Seed</label>
+              <input type="text" class="form-control" id="brokerSeedField" placeholder="Broker Seed">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-4 mb-3">
               <label for="brokerTokenSellOfferIndexField" class="form-label">Sell Offer Index</label>
               <input type="text" class="form-control" id="brokerTokenSellOfferIndexField" placeholder="Sell Offer Index">
             </div>
@@ -82,7 +196,7 @@
     </div>
 
     <!-- Broker Cancel Offer -->
-    <div class="card">
+    <!-- <div class="card">
       <div class="card-header bg-danger text-white">
         Cancel Broker Offer
       </div>
@@ -95,10 +209,10 @@
           <button type="button" class="btn btn-danger" onclick="brCancelOffer()">Cancel Offer</button>
         </form>
       </div>
-    </div>
+    </div> -->
 
     <!-- Account Information -->
-    <div class="card">
+    <!-- <div class="card">
       <div class="card-header bg-warning text-dark">
         Account Information
       </div>
@@ -106,23 +220,23 @@
         <form>
           <div class="row">
             <div class="col-md-4 mb-3">
-              <label for="standbySeedField" class="form-label">Standby Account Seed</label>
-              <input type="text" class="form-control" id="standbySeedField" placeholder="Standby Seed">
+              <label for="standbySeedField2" class="form-label">Standby Account Seed</label>
+              <input type="text" class="form-control" id="standbySeedField2" placeholder="Standby Seed">
             </div>
             <div class="col-md-4 mb-3">
-              <label for="operationalSeedField" class="form-label">Operational Account Seed</label>
-              <input type="text" class="form-control" id="operationalSeedField" placeholder="Operational Seed">
+              <label for="operationalSeedField2" class="form-label">Operational Account Seed</label>
+              <input type="text" class="form-control" id="operationalSeedField2" placeholder="Operational Seed">
             </div>
             <div class="col-md-4 mb-3">
-              <label for="brokerSeedField" class="form-label">Broker Account Seed</label>
-              <input type="text" class="form-control" id="brokerSeedField" placeholder="Broker Seed">
+              <label for="brokerSeedField2" class="form-label">Broker Account Seed</label>
+              <input type="text" class="form-control" id="brokerSeedField2" placeholder="Broker Seed">
             </div>
           </div>
           <button type="button" class="btn btn-warning" onclick="getAccountsFromSeeds()">Get Accounts from Seeds</button>
           <button type="button" class="btn btn-secondary" onclick="getBalances()">Get Balances</button>
         </form>
       </div>
-    </div>
+    </div> -->
 
     <!-- Results Section -->
     <div class="card">
@@ -138,16 +252,5 @@
     </div>
 
   </div>
-
-  <!-- Bootstrap JS and Dependencies -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <!-- XRPL JavaScript SDK -->
-  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/xrpl/2.3.0/xrpl.min.js"></script> -->
-  <script src='https://unpkg.com/xrpl@2.7.0/build/xrpl-latest-min.js'></script>
-
-  <!-- Your Custom JavaScript File -->
-  <script src="ripplex5-broker-nfts.js"></script>
-
 </body>
 </html>
