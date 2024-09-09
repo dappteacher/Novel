@@ -132,6 +132,73 @@
             await client.disconnect();
         }
     }
+    async function brCancelOffer() {
+      // Get the broker account and connect to the ledger.
+      const wallet = xrpl.Wallet.fromSeed(brokerSeedField2.value)
+      let net = getNet()
+      const client = new xrpl.Client(net)
+      results = 'Connecting to ' + getNet() + '...'
+      brokerResultField.value = results
+      await client.connect()
+      results +=  "\nConnected. Cancelling offer..."
+      brokerResultField.value = results
+
+      // The Token ID must be converted to an array.
+      const tokenOfferIDs = [brokerTokenBuyOfferIndexField2.value]
+
+      // Prepare the transaction.
+      const transactionBlob = {
+          "TransactionType": "NFTokenCancelOffer",
+          "Account": wallet.classicAddress,
+          "NFTokenOffers": tokenOfferIDs
+        }
+      // Submit the transaction and wait for the results.
+      const tx = await client.submitAndWait(transactionBlob,{wallet})
+
+      // Get the sell offers and report the results.
+      results += "\n\n***Sell Offers***\n"
+      let nftSellOffers
+      try {
+        nftSellOffers = await client.request({
+          method: "nft_sell_offers",
+          nft_id: brokerTokenBuyOfferIndexField2.value
+        })
+      } catch (err) {
+        nftSellOffers = "No sell offers."
+      }
+      results += JSON.stringify(nftSellOffers,null,2)
+
+      // Get the buy offers and report the results.
+      results += "\n\n***Buy Offers***\n"
+      let nftBuyOffers
+      try {
+        nftBuyOffers = await client.request({
+          method: "nft_buy_offers",
+          nft_id: brokerTokenBuyOfferIndexField2.value })
+      } catch (err) {
+        nftBuyOffers = "No buy offers."
+      }
+      results += JSON.stringify(nftBuyOffers,null,2)
+
+      // Report the transaction results
+      results += "\nTransaction result:\n" +
+      JSON.stringify(tx.result.meta.TransactionResult, null, 2)
+      results += "\nBalance changes:\n" + 
+      JSON.stringify(xrpl.getBalanceChanges(tx.result.meta), null, 2)
+      document.getElementById('brokerResultField').value = results
+
+      // Disconnect from the ledger.
+      client.disconnect()
+  }// End of brCancelOffer()
+  async function getBalance(){
+    brokerResultField.value = "Wait a minute ...";
+    await client.connect();
+
+    const wallet = xrpl.Wallet.fromSeed(txtSeed.value)
+    const balance = await client.getXrpBalance(wallet.address);
+    brokerResultField.value = balance;
+    await client.disconnect();
+  }
   </script>
 </head>
 <body>
@@ -196,47 +263,40 @@
     </div>
 
     <!-- Broker Cancel Offer -->
-    <!-- <div class="card">
+    <div class="card">
       <div class="card-header bg-danger text-white">
         Cancel Broker Offer
       </div>
       <div class="card-body">
         <form>
+          <div class="col-md-4 mb-3">
+            <label for="brokerSeedField2" class="form-label">Broker Account Seed</label>
+            <input type="text" class="form-control" id="brokerSeedField2" placeholder="Broker Seed">
+          </div>
           <div class="mb-3">
-            <label for="brokerTokenBuyOfferIndexField" class="form-label">Buy Offer Index</label>
-            <input type="text" class="form-control" id="brokerTokenBuyOfferIndexField" placeholder="Buy Offer Index">
+            <label for="brokerTokenBuyOfferIndexField2" class="form-label">Broker buy Offer Index</label>
+            <input type="text" class="form-control" id="brokerTokenBuyOfferIndexField2" placeholder="Broker buy Offer Index">
           </div>
           <button type="button" class="btn btn-danger" onclick="brCancelOffer()">Cancel Offer</button>
         </form>
       </div>
-    </div> -->
+    </div>
 
     <!-- Account Information -->
-    <!-- <div class="card">
+    <div class="card">
       <div class="card-header bg-warning text-dark">
         Account Information
       </div>
       <div class="card-body">
         <form>
-          <div class="row">
-            <div class="col-md-4 mb-3">
-              <label for="standbySeedField2" class="form-label">Standby Account Seed</label>
-              <input type="text" class="form-control" id="standbySeedField2" placeholder="Standby Seed">
+            <div class="mb-3">
+              <label for="txtSeed" class="form-label">Seed of account</label>
+              <input type="text" class="form-control" id="txtSeed" placeholder="Seed of account">
             </div>
-            <div class="col-md-4 mb-3">
-              <label for="operationalSeedField2" class="form-label">Operational Account Seed</label>
-              <input type="text" class="form-control" id="operationalSeedField2" placeholder="Operational Seed">
-            </div>
-            <div class="col-md-4 mb-3">
-              <label for="brokerSeedField2" class="form-label">Broker Account Seed</label>
-              <input type="text" class="form-control" id="brokerSeedField2" placeholder="Broker Seed">
-            </div>
-          </div>
-          <button type="button" class="btn btn-warning" onclick="getAccountsFromSeeds()">Get Accounts from Seeds</button>
-          <button type="button" class="btn btn-secondary" onclick="getBalances()">Get Balances</button>
+          <button type="button" class="btn btn-warning" onclick="getBalance()">Get Balance</button>
         </form>
       </div>
-    </div> -->
+    </div>
 
     <!-- Results Section -->
     <div class="card">
